@@ -37,7 +37,11 @@ export async function messageCreateHandler(message: Message): Promise<void> {
             .setCustomId(`fill-image-form:${token}`)
             .setLabel("Add title & description")
             .setStyle(ButtonStyle.Primary);
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+        const dismissButton = new ButtonBuilder()
+            .setCustomId(`dismiss-image-form:${token}`)
+            .setLabel("No")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button, dismissButton);
 
         const promptMessage = await message.reply({
             content: "Click the button to add a title and description for this image.",

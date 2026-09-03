@@ -65,6 +65,18 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
         return;
     }
 
+    if (interaction.isButton() && interaction.customId.startsWith("dismiss-image-form:")) {
+        const token = interaction.customId.slice("dismiss-image-form:".length);
+        const pending = pendingImagePosts.get(token);
+        pendingImagePosts.delete(token);
+
+        await interaction.deferUpdate();
+        if (pending) {
+            await pending.promptMessage.delete().catch(() => undefined);
+        }
+        return;
+    }
+
     if (interaction.isButton() && interaction.customId.startsWith("fill-image-form:")) {
         const token = interaction.customId.slice("fill-image-form:".length);
         const pending = pendingImagePosts.get(token);
