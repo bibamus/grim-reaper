@@ -6,6 +6,7 @@ import {
     type Message,
 } from "discord.js";
 import { pendingImagePosts } from "./pendingImagePosts.ts";
+import { getImageChannelIds } from "./guildConfig.ts";
 
 export async function messageCreateHandler(message: Message): Promise<void> {
     if (message.author.bot) {
@@ -13,6 +14,15 @@ export async function messageCreateHandler(message: Message): Promise<void> {
     }
 
     if (message.channel.type === ChannelType.DM) {
+        return;
+    }
+
+    if (!message.guildId) {
+        return;
+    }
+
+    const configuredChannelIds = getImageChannelIds(message.guildId);
+    if (!configuredChannelIds.includes(message.channelId)) {
         return;
     }
 

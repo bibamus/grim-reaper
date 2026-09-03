@@ -27,6 +27,9 @@ Thumbs.db
 # Coverage
 coverage/
 
+# Bot data
+data/
+
 
 # IntelliJ
 *.iml

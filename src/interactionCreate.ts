@@ -8,6 +8,7 @@ import {
     type Interaction,
 } from "discord.js";
 import {pendingImagePosts} from "./pendingImagePosts.ts";
+import {addImageChannelId, getImageChannelIds, removeImageChannelId} from "./guildConfig.ts";
 
 const SCRIPT_OPTIONS = ["Trouble Brewing", "Bad Moon Rising", "Sects and Violets"];
 const OTHER_SCRIPT_OPTION = "Other";
@@ -17,6 +18,53 @@ const WINNER_EMOJIS: Record<string, string> = {
 };
 
 export async function interactionCreateHandler(interaction: Interaction): Promise<void> {
+    if (interaction.isChatInputCommand() && interaction.commandName === "grim-channel") {
+        if (!interaction.inGuild()) {
+            await interaction.reply({content: "This command can only be used in a server.", ephemeral: true});
+            return;
+        }
+
+        const subcommand = interaction.options.getSubcommand();
+
+        if (subcommand === "add") {
+            const channel = interaction.options.getChannel("channel", true);
+            const added = addImageChannelId(interaction.guildId, channel.id);
+            await interaction.reply({
+                content: added
+                    ? `Now listening for images in <#${channel.id}>.`
+                    : `<#${channel.id}> is already configured.`,
+                ephemeral: true,
+            });
+            return;
+        }
+
+        if (subcommand === "remove") {
+            const channel = interaction.options.getChannel("channel", true);
+            const removed = removeImageChannelId(interaction.guildId, channel.id);
+            await interaction.reply({
+                content: removed
+                    ? `Stopped listening for images in <#${channel.id}>.`
+                    : `<#${channel.id}> was not configured.`,
+                ephemeral: true,
+            });
+            return;
+        }
+
+        if (subcommand === "list") {
+            const channelIds = getImageChannelIds(interaction.guildId);
+            await interaction.reply({
+                content:
+                    channelIds.length > 0
+                        ? `Configured channels:\n${channelIds.map((id) => `- <#${id}>`).join("\n")}`
+                        : "No channels are configured.",
+                ephemeral: true,
+            });
+            return;
+        }
+
+        return;
+    }
+
     if (interaction.isButton() && interaction.customId.startsWith("fill-image-form:")) {
         const token = interaction.customId.slice("fill-image-form:".length);
         const pending = pendingImagePosts.get(token);
