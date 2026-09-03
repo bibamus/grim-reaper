@@ -16,11 +16,6 @@ export async function messageCreateHandler(message: Message): Promise<void> {
         return;
     }
 
-    if (message.content === "Hello!") {
-        await message.reply(`Hello ${message.author.username}`);
-        return;
-    }
-
     const imageAttachments = message.attachments.filter((attachment) =>
         attachment.contentType?.startsWith("image/"),
     );
@@ -42,12 +37,10 @@ export async function messageCreateHandler(message: Message): Promise<void> {
         pendingImagePosts.set(token, {
             attachmentUrl: originalImage.url,
             fileName: originalImage.name ?? "image.png",
+            author: message.author,
             message,
             promptMessage,
         });
         return;
     }
-
-    const reversed = message.content.split("").reverse().join("");
-    await message.reply(reversed);
 }

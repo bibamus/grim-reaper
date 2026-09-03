@@ -1,8 +1,9 @@
-import type { Message } from "discord.js";
+import type { Message, User } from "discord.js";
 
 export interface PendingImagePost {
     attachmentUrl: string;
     fileName: string;
+    author: User;
     message: Message;
     promptMessage: Message;
 }

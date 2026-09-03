@@ -1,6 +1,5 @@
 import {
     AttachmentBuilder,
-    EmbedBuilder,
     LabelBuilder,
     ModalBuilder,
     StringSelectMenuBuilder,
@@ -8,16 +7,21 @@ import {
     TextInputStyle,
     type Interaction,
 } from "discord.js";
-import { pendingImagePosts } from "./pendingImagePosts.ts";
+import {pendingImagePosts} from "./pendingImagePosts.ts";
 
 const SCRIPT_OPTIONS = ["Trouble Brewing", "Bad Moon Rising", "Sects and Violets"];
+const OTHER_SCRIPT_OPTION = "Other";
+const WINNER_EMOJIS: Record<string, string> = {
+    Good: "😇",
+    Evil: "😈",
+};
 
 export async function interactionCreateHandler(interaction: Interaction): Promise<void> {
     if (interaction.isButton() && interaction.customId.startsWith("fill-image-form:")) {
         const token = interaction.customId.slice("fill-image-form:".length);
         const pending = pendingImagePosts.get(token);
         if (!pending) {
-            await interaction.reply({ content: "This form has expired.", ephemeral: true });
+            await interaction.reply({content: "This form has expired.", ephemeral: true});
             return;
         }
 
@@ -25,16 +29,7 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
             .setCustomId(`image-form:${token}`)
             .setTitle("Image details");
 
-        const titleLabel = new LabelBuilder()
-            .setLabel("Title")
-            .setTextInputComponent((input: TextInputBuilder) =>
-                input.setCustomId("title").setStyle(TextInputStyle.Short).setRequired(true),
-            );
-        const descriptionLabel = new LabelBuilder()
-            .setLabel("Description")
-            .setTextInputComponent((input: TextInputBuilder) =>
-                input.setCustomId("description").setStyle(TextInputStyle.Paragraph).setRequired(true),
-            );
+
         const scriptLabel = new LabelBuilder()
             .setLabel("Script")
             .setStringSelectMenuComponent((select: StringSelectMenuBuilder) =>
@@ -42,47 +37,97 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
                     .setCustomId("script")
                     .setRequired(true)
                     .addOptions(
-                        SCRIPT_OPTIONS.map((option) => ({ label: option, value: option })),
+                        [...SCRIPT_OPTIONS, OTHER_SCRIPT_OPTION].map((option) => ({
+                            label: option,
+                            value: option,
+                        })),
                     ),
             );
 
-        modal.addLabelComponents(titleLabel, descriptionLabel, scriptLabel);
+        const customScriptLabel = new LabelBuilder()
+            .setLabel(`Custom script name (if "${OTHER_SCRIPT_OPTION}" selected)`)
+            .setTextInputComponent((input: TextInputBuilder) =>
+                input.setCustomId("customScript").setStyle(TextInputStyle.Short).setRequired(false),
+            );
+
+        const titleLabel = new LabelBuilder()
+            .setLabel("Title")
+            .setTextInputComponent((input: TextInputBuilder) =>
+                input.setCustomId("title").setStyle(TextInputStyle.Short).setRequired(false),
+            );
+        const descriptionLabel = new LabelBuilder()
+            .setLabel("Description")
+            .setTextInputComponent((input: TextInputBuilder) =>
+                input.setCustomId("description").setStyle(TextInputStyle.Paragraph).setRequired(false),
+            );
+
+        const winnerLabel = new LabelBuilder()
+            .setLabel("Winner")
+            .setStringSelectMenuComponent((select: StringSelectMenuBuilder) =>
+                select
+                    .setCustomId("winner")
+                    .setRequired(true)
+                    .addOptions(
+                        Object.keys(WINNER_EMOJIS).map((option) => ({label: option, value: option})),
+                    ),
+            );
+
+        modal.addLabelComponents(scriptLabel, winnerLabel, customScriptLabel, titleLabel, descriptionLabel);
 
         await interaction.showModal(modal);
         return;
     }
 
     if (interaction.isModalSubmit() && interaction.customId.startsWith("image-form:")) {
+        await interaction.deferReply({ephemeral: true});
+
         const token = interaction.customId.slice("image-form:".length);
         const pending = pendingImagePosts.get(token);
         if (!pending) {
-            await interaction.reply({ content: "This form has expired.", ephemeral: true });
+            await interaction.editReply({content: "This form has expired."});
             return;
         }
         pendingImagePosts.delete(token);
 
         const title = interaction.fields.getTextInputValue("title");
         const description = interaction.fields.getTextInputValue("description");
-        const [script] = interaction.fields.getStringSelectValues("script");
-        if (!script) {
-            await interaction.reply({ content: "Please select a script.", ephemeral: true });
+        const [selectedScript] = interaction.fields.getStringSelectValues("script");
+        if (!selectedScript) {
+            await interaction.editReply({content: "Please select a script."});
             return;
         }
 
-        const attachment = new AttachmentBuilder(pending.attachmentUrl, { name: pending.fileName });
-        const embed = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(description)
-            .addFields([{ name: "Script", value: script }])
-            .setImage(`attachment://${pending.fileName}`);
+        let script = selectedScript;
+        if (selectedScript === OTHER_SCRIPT_OPTION) {
+            const customScript = interaction.fields.getTextInputValue("customScript").trim();
+            if (!customScript) {
+                await interaction.editReply({
+                    content: `Please enter a custom script name when "${OTHER_SCRIPT_OPTION}" is selected.`,
+                });
+                return;
+            }
+            script = customScript;
+        }
+
+        const attachment = new AttachmentBuilder(pending.attachmentUrl, {name: pending.fileName});
+        const [winner] = interaction.fields.getStringSelectValues("winner");
+        const winnerEmoji = winner ? WINNER_EMOJIS[winner] : undefined;
+        if (!winnerEmoji) {
+            await interaction.editReply({content: "Please select a winner."});
+            return;
+        }
+
+        const headeline = title ? `# ${title} (${script})` : `# ${script}`;
+        const content = `${headeline}\n${description}\n-# Submitted by ${pending.author}`;
 
         if (!interaction.channel?.isSendable()) {
-            await interaction.reply({ content: "Could not post here.", ephemeral: true });
+            await interaction.editReply({content: "Could not post here."});
             return;
         }
 
-        await interaction.channel.send({ embeds: [embed], files: [attachment] });
-        await interaction.reply({ content: "Posted!", ephemeral: true });
+        const posted = await interaction.channel.send({content, files: [attachment]});
+        await posted.react(winnerEmoji);
+        await interaction.editReply({content: "Posted!"});
 
         await pending.promptMessage.delete().catch(() => undefined);
         await pending.message.delete().catch(() => undefined);
