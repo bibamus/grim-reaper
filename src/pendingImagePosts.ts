@@ -6,6 +6,7 @@ export interface PendingImagePost {
     author: User;
     message: Message;
     promptMessage: Message;
+    timeout?: NodeJS.Timeout;
 }
 
 export const pendingImagePosts = new Map<string, PendingImagePost>();

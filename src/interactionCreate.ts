@@ -68,12 +68,29 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
     if (interaction.isButton() && interaction.customId.startsWith("dismiss-image-form:")) {
         const token = interaction.customId.slice("dismiss-image-form:".length);
         const pending = pendingImagePosts.get(token);
+        if (!pending) {
+            await interaction.deferUpdate().catch(() => undefined);
+            if ("delete" in interaction.message) {
+                await interaction.message.delete().catch(() => undefined);
+            }
+            return;
+        }
+
+        if (interaction.user.id !== pending.author.id) {
+            await interaction.reply({
+                content: "Only the author of the image can dismiss this.",
+                ephemeral: true,
+            });
+            return;
+        }
+
+        if (pending.timeout) {
+            clearTimeout(pending.timeout);
+        }
         pendingImagePosts.delete(token);
 
         await interaction.deferUpdate();
-        if (pending) {
-            await pending.promptMessage.delete().catch(() => undefined);
-        }
+        await pending.promptMessage.delete().catch(() => undefined);
         return;
     }
 
@@ -84,6 +101,25 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
             await interaction.reply({content: "This form has expired.", ephemeral: true});
             return;
         }
+
+        if (interaction.user.id !== pending.author.id) {
+            await interaction.reply({
+                content: "Only the author of the image can fill out this form.",
+                ephemeral: true,
+            });
+            return;
+        }
+
+        if (pending.timeout) {
+            clearTimeout(pending.timeout);
+        }
+        pending.timeout = setTimeout(async () => {
+            const p = pendingImagePosts.get(token);
+            if (p) {
+                pendingImagePosts.delete(token);
+                await p.promptMessage.delete().catch(() => undefined);
+            }
+        }, 10 * 60 * 1000);
 
         const modal = new ModalBuilder()
             .setCustomId(`image-form:${token}`)
@@ -147,7 +183,11 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
             await interaction.editReply({content: "This form has expired."});
             return;
         }
-        pendingImagePosts.delete(token);
+
+        if (interaction.user.id !== pending.author.id) {
+            await interaction.editReply({content: "Only the author of the image can submit this form."});
+            return;
+        }
 
         const title = interaction.fields.getTextInputValue("title");
         const description = interaction.fields.getTextInputValue("description");
@@ -188,6 +228,11 @@ export async function interactionCreateHandler(interaction: Interaction): Promis
         const posted = await interaction.channel.send({content, files: [attachment]});
         await posted.react(winnerEmoji);
         await interaction.editReply({content: "Posted!"});
+
+        if (pending.timeout) {
+            clearTimeout(pending.timeout);
+        }
+        pendingImagePosts.delete(token);
 
         await pending.promptMessage.delete().catch(() => undefined);
         await pending.message.delete().catch(() => undefined);

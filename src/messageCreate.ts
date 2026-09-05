@@ -48,12 +48,21 @@ export async function messageCreateHandler(message: Message): Promise<void> {
             components: [row],
         });
 
+        const timeout = setTimeout(async () => {
+            const pending = pendingImagePosts.get(token);
+            if (pending) {
+                pendingImagePosts.delete(token);
+                await pending.promptMessage.delete().catch(() => undefined);
+            }
+        }, 3 * 60 * 1000);
+
         pendingImagePosts.set(token, {
             attachmentUrl: originalImage.url,
             fileName: originalImage.name ?? "image.png",
             author: message.author,
             message,
             promptMessage,
+            timeout,
         });
         return;
     }
